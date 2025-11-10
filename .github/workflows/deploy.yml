@@ -1,0 +1,38 @@
+name: Deploy build
+
+on:
+  workflow_run:
+    workflows: [ Tests ]
+    branches: main
+    types:
+      - completed
+
+jobs:
+  build:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    permissions:
+      packages: write
+      contents: read
+    with:
+      ref_name: ${{ inputs.ref_name || github.ref_name }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: Release
+    steps:
+      - name: Run deployment wf
+        uses: the-actions-org/workflow-dispatch@v4
+        with:
+          workflow: deploy-v2.yml
+          ref: main
+          repo: ${{ vars.DEPLOY_REPO }}
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          inputs: |
+            {
+              "app_name": "ton-blockchain/wallets-list",
+              "image_tag": "${{ needs.build.outputs.image_tag }}",
+              "image_digest": "${{ needs.build.outputs.image_digest }}"
+            }
